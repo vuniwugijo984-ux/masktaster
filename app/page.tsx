@@ -222,6 +222,14 @@ function linkVerdict(task: TaskDefinition, attack: Attack, patch: Patch, ids: st
   return "SURVIVES";
 }
 
+function sealingPatchId(task: TaskDefinition, attack: Attack, ids: string[]) {
+  if (hasSoftenerInArea(task, ids, attack.area)) return null;
+  return ids.find((id) => {
+    const patch = patchById(task, id);
+    return attack.sealTags.some((tag) => patch.tags.includes(tag));
+  }) ?? null;
+}
+
 export default function Home() {
   const [screen, setScreen] = useState<"home" | "game">("home");
   const [taskId, setTaskId] = useState("camel");
@@ -247,6 +255,10 @@ export default function Home() {
   const [askOpen, setAskOpen] = useState(false);
   const [askQuestion, setAskQuestion] = useState("");
   const [askAnswer, setAskAnswer] = useState("");
+  const [alexIntroduced, setAlexIntroduced] = useState(false);
+  const [alexReplyIndex, setAlexReplyIndex] = useState(0);
+  const [guideActive, setGuideActive] = useState(true);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const workspaceRef = useRef<HTMLDivElement>(null);
   const attackRef = useRef<HTMLElement>(null);
@@ -264,6 +276,26 @@ export default function Home() {
   const finished = sealedCount === task.attacks.length && !taskBroken;
   const area = selectedArea ? task.areas[selectedArea] : null;
 
+  const verdictLabel: Record<Verdict, string> = {
+    SEALED: "LOOPHOLE CLOSED",
+    SURVIVES: "LOOPHOLE SURVIVES",
+    DISPUTED: "READING DISPUTED",
+  };
+
+  const guideCopy = taskBroken
+    ? "FIX — Remove the amendment that makes the task impossible."
+    : phase === "edit" && snapshots.length === 0 && patches.length === 0
+      ? "OBJECTIVE 1/3 — Click any wording you want to tighten, or test the original task as written."
+      : phase === "edit" && snapshots.length === 0
+        ? "OBJECTIVE 2/3 — Test this wording. Alex will try a move it may still allow."
+        : phase === "attack"
+          ? "OBJECTIVE 3/3 — Decide whether Alex's move still obeys your amended task."
+          : phase === "challenge"
+            ? "OBJECTIVE 3/3 — Click the exact amendment that makes Alex's move illegal."
+            : phase === "verdict"
+              ? "RESULT — Read the ruling, then rewrite or let Alex try another move."
+              : "Every known loophole is blocked. The specimen record is ready.";
+
   const sentenceText = useMemo(() => {
     const words: string[] = [];
     task.tokens.forEach((token) => {
@@ -273,6 +305,10 @@ export default function Home() {
     });
     return words.join(" ").replace(/\s+([.,!?])/g, "$1");
   }, [patches, task]);
+
+  useEffect(() => {
+    if (window.localStorage.getItem("masktaster-guidance-seen") === "1") setGuideActive(false);
+  }, []);
 
   useEffect(() => {
     function positionLine() {
@@ -364,6 +400,21 @@ export default function Home() {
     setAskOpen(false);
     setAskQuestion("");
     setAskAnswer("");
+    setAlexIntroduced(false);
+    setAlexReplyIndex(0);
+    setHelpOpen(false);
+  }
+
+  function finishGuidance() {
+    if (!guideActive) return;
+    setGuideActive(false);
+    window.localStorage.setItem("masktaster-guidance-seen", "1");
+  }
+
+  function replayGuidance() {
+    window.localStorage.removeItem("masktaster-guidance-seen");
+    setGuideActive(true);
+    setHelpOpen(false);
   }
 
   function reset() {
@@ -377,8 +428,8 @@ export default function Home() {
     resetForTask(next);
   }
 
-  function chooseNextAttack() {
-    const unresolved = task.attacks.filter((attack) => !claims[attack.id]);
+  function chooseNextAttack(knownClaims = claims) {
+    const unresolved = task.attacks.filter((attack) => !knownClaims[attack.id]);
     return unresolved[0]?.id ?? null;
   }
 
@@ -386,17 +437,29 @@ export default function Home() {
     setSnapshots((items) => [...items, { label: `TRY ${items.length + 1}`, patches: [...patches] }]);
     setAttackOwner("ALEX");
     setOutcome(null);
-    setNudge("");
     if (taskBroken) {
+      setNudge("");
       setCurrentAttackId(null);
       setPhase("verdict");
       return;
     }
-    const next = currentAttackId && !claims[currentAttackId] ? currentAttackId : chooseNextAttack();
+
+    const testedClaims: Record<string, Claim> = { ...claims };
+    for (const attack of task.attacks) {
+      const patchId = sealingPatchId(task, attack, effectivePatches);
+      if (patchId) testedClaims[attack.id] = { patchId, verdict: "SEALED" };
+    }
+    const newlyRejected = Object.keys(testedClaims).filter((id) => !claims[id]).length;
+    setClaims(testedClaims);
+
+    const currentStillOpen = currentAttackId && !testedClaims[currentAttackId];
+    const next = currentStillOpen ? currentAttackId : chooseNextAttack(testedClaims);
     if (!next) {
+      setNudge("");
       setPhase("record");
       return;
     }
+    setNudge(newlyRejected ? `Alex discards ${newlyRejected} move${newlyRejected === 1 ? "" : "s"} contradicted by your wording and tries another.` : "");
     setCurrentAttackId(next);
     setPhase("attack");
   }
@@ -436,6 +499,7 @@ export default function Home() {
   }
 
   function returnToEdit() {
+    finishGuidance();
     setPhase("edit");
     setOutcome(null);
     setNudge("");
@@ -447,6 +511,7 @@ export default function Home() {
   }
 
   function counterattack() {
+    finishGuidance();
     setOutcome(null);
     setNudge("");
     const next = chooseNextAttack();
@@ -525,8 +590,42 @@ export default function Home() {
       "Hello there.",
       "Oh, hello.",
     ];
-    const isGreeting = /^(?:hi|hello|hey|hiya|good morning|good afternoon|good evening)(?:,?\s+(?:alex|little alex(?: horne)?))?[.!?]*$/.test(query);
-    setAskAnswer(isGreeting ? greetings[Math.floor(Math.random() * greetings.length)] : "");
+    const greetingText = query
+      .replace(/[.!?]+$/g, "")
+      .replace(/^(?:alex|little alex(?: horne)?)[,:]?\s+/i, "")
+      .replace(/,?\s+(?:alex|little alex(?: horne)?)$/i, "")
+      .trim();
+    const isGreeting = /^(?:(?:oh[, ]+)?(?:hi|hello|hullo|hey|hiya|howdy|yo|greetings|salutations|ahoy)(?: there)?|good (?:morning|afternoon|evening|day)|morning|afternoon|evening|how do you do|nice to meet you|pleased to meet you|what'?s up|sup)$/i.test(greetingText);
+    if (!alexIntroduced) {
+      if (isGreeting) {
+        setAlexIntroduced(true);
+        setAskAnswer(greetings[Math.floor(Math.random() * greetings.length)]);
+      } else {
+        setAskAnswer("...");
+      }
+    } else {
+      const subjects: Array<[RegExp, string]> = [
+        [/\bmat\b/, "the mat"],
+        [/\bballs?\b/, "the balls"],
+        [/\bhill\b/, "the hill"],
+        [/\bcamels?\b/, "the camel"],
+        [/\bgaps?\b/, "the gap"],
+        [/\bstuffing|contents?\b/, "the contents"],
+        [/\bducks?\b/, "the duck"],
+        [/\bgreg\b/, "Greg"],
+        [/\btask|wording|rules?|loopholes?|amendments?\b/, "the wording"],
+      ];
+      const subject = subjects.find(([pattern]) => pattern.test(query))?.[1];
+      const evasions = subject
+        ? [`I heard the part about ${subject}. I'm not going to improve it for you.`, `Your question about ${subject} has been noted and carefully left unanswered.`]
+        : /\b(?:why|how)\b/.test(query)
+          ? ["I understand why you're asking. That's not the same as answering.", "I followed the question. I simply don't have anything useful to add."]
+          : /\b(?:can|could|would|will|may)\b/.test(query)
+            ? ["I understood the request. I haven't agreed to it.", "You have asked very clearly. That will have to be enough."]
+            : ["I followed that. I'm choosing not to clarify it.", "That was comprehensible and has still not earned an answer."];
+      setAskAnswer(isGreeting ? "Yes. We have established that." : evasions[alexReplyIndex % evasions.length]);
+      if (!isGreeting) setAlexReplyIndex((value) => value + 1);
+    }
     setAskQuestion("");
   }
 
@@ -572,8 +671,9 @@ export default function Home() {
       <main className="index-screen">
         <header className="index-head"><b>MASK TASTER</b><span>task-review / local</span></header>
         <section className="index-body">
-          <p className="index-command">mask-taster&gt; open tasks</p>
-          <p className="index-deck">Play with loopholes. Amend a task. Hand it to Alex.</p>
+          <p className="index-command">PATCH THE TASK.</p>
+          <p className="index-deck">Alex exploits anything your wording still allows. Block every known loophole with as little added wording as possible.</p>
+          <p className="index-loop">EDIT → TEST → JUDGE → REWRITE</p>
           <div className="task-list">
             {TASKS.map((item) => (
               <button className="task-row" key={item.id} onClick={() => openTask(item.id)}>
@@ -596,14 +696,22 @@ export default function Home() {
         <button onClick={() => setScreen("home")}>← tasks</button>
         <b>{task.file}</b>
         <span>ink {ink}</span>
-        <span>sealed {displayedSealedCount}/{task.attacks.length}</span>
+        <span>blocked {displayedSealedCount}/{task.attacks.length}</span>
+        <button onClick={() => setHelpOpen((value) => !value)}>? help</button>
         <button onClick={undo} disabled={!history.length}>undo</button>
       </header>
+
+      {helpOpen && <section className="help-panel">
+        <span>Edit the task.</span><span>Test the wording.</span><span>Judge whether Alex's move is legal.</span><span>Rewrite until every known loophole is blocked.</span>
+        <button onClick={replayGuidance}>[replay guidance]</button><button onClick={() => setHelpOpen(false)}>[close]</button>
+      </section>}
 
       <div className={`task-workspace phase-${phase}`} ref={workspaceRef}>
         {line && <svg className={`claim-thread ${outcome?.verdict.toLowerCase()}`} aria-hidden="true"><path d={`M ${line.x1} ${line.y1} C ${line.x1 - 70} ${line.y1 - 45}, ${line.x2 + 70} ${line.y2 + 45}, ${line.x2} ${line.y2}`} /><circle cx={line.x1} cy={line.y1} r="4" /><circle cx={line.x2} cy={line.y2} r="4" /></svg>}
 
-        <section className={`task-paper ${taskBroken ? "task-broken" : ""}`}>
+        {guideActive && <aside className="guide-bar"><span>{guideCopy}</span><button onClick={finishGuidance}>[skip]</button></aside>}
+
+        <section className={`task-paper ${taskBroken ? "task-broken" : ""} ${guideActive && phase === "edit" && !area ? "guide-focus-area" : ""}`}>
           <header><span>{task.file}</span><span>{phase === "record" ? "record" : patches.length ? "modified" : "original"}</span></header>
           <div className="code-line"><span className="line-number">1</span><p className="task-sentence">{renderTaskTokens()}</p></div>
           <div className="code-line secondary"><span className="line-number">2</span><p>{task.supportLine}</p></div>
@@ -616,12 +724,12 @@ export default function Home() {
             <div className="single-output"><p className="system-label danger">TASK BROKEN</p><h2>No executable route remains.</h2><p>Your amendment forbids an object the task still requires you to move.</p><button className="primary" onClick={returnToEdit}>[retract amendment]</button></div>
           ) : phase === "edit" ? (
             <div className="editor-output">
-              <div className="editor-prompt"><p className="system-label">mt&gt;</p><h2>{area ? `amend “${task.tokens.find((token) => token.id === selectedToken)?.text ?? area.cursor}”` : "select any word you want to change"}</h2>{nudge && <p>{nudge}</p>}</div>
+              <div className="editor-prompt"><p className="system-label">{"mt>"}</p><h2>{area ? `amend “${task.tokens.find((token) => token.id === selectedToken)?.text ?? area.cursor}”` : "select any word you want to change"}</h2>{nudge && <p>{nudge}</p>}</div>
               {area && <><p className="area-prompt">{area.prompt}</p><div className="patch-menu">{task.patches.filter((patch) => patch.area === selectedArea).map((patch, index) => <button className={patches.includes(patch.id) ? "selected" : ""} key={patch.id} onClick={() => togglePatch(patch.id)} title={patch.whisper}><span className="key">{index + 1}</span><span>{patch.label}</span></button>)}</div></>}
-              {weirdOpen && <div className="weird-line"><span>&gt;</span><select value={weirdVerb} onChange={(event) => setWeirdVerb(event.target.value)} aria-label="Attack verb">{["MOVE", "REMOVE", "ALTER", "SEPARATE", "CREATE", "USE"].map((value) => <option key={value}>{value}</option>)}</select><select value={weirdTarget} onChange={(event) => setWeirdTarget(event.target.value)} aria-label="Attack target">{task.weirdTargets.map((value) => <option key={value}>{value}</option>)}</select><button onClick={submitWeirdAttack}>RUN</button></div>}
+              {weirdOpen && <div className="weird-box"><p>Test a move you think the current wording still allows.</p><div className="weird-line"><span>{">"}</span><select value={weirdVerb} onChange={(event) => setWeirdVerb(event.target.value)} aria-label="Attack verb">{["MOVE", "REMOVE", "ALTER", "SEPARATE", "CREATE", "USE"].map((value) => <option key={value}>{value}</option>)}</select><select value={weirdTarget} onChange={(event) => setWeirdTarget(event.target.value)} aria-label="Attack target">{task.weirdTargets.map((value) => <option key={value}>{value}</option>)}</select><button onClick={submitWeirdAttack}>RUN</button></div></div>}
               {!!snapshots.length && <div className="history-line"><span>VERSIONS</span>{snapshots.map((snapshot) => <button key={snapshot.label} onClick={() => restoreSnapshot(snapshot)}>{snapshot.label}</button>)}</div>}
-              <div className="main-actions"><button className="quiet" onClick={() => setWeirdOpen((value) => !value)}>[propose attack]</button><button className="primary" onClick={sendToTest}>[hand to alex] <b>↵</b></button></div>
-              {patches.length > 0 && !duckedPatch && <div className="duck-dock"><button className={`duck-tool ${duckDrag.active ? "dragging" : ""}`} style={{ transform: `translate(${duckDrag.x}px, ${duckDrag.y}px)` }} onPointerDown={startDuckDrag} onPointerMove={moveDuck} onPointerUp={dropDuck} onPointerCancel={() => setDuckDrag({ active: false, x: 0, y: 0 })} aria-label="Drag the pixel duck onto an amendment"><img src="duck-white-on-black.png" alt="White pixel rubber duck" /></button><span>drag onto an amendment to test without it</span></div>}
+              <div className="main-actions">{!!snapshots.length && <button className="quiet" onClick={() => setWeirdOpen((value) => !value)}>[I SEE ANOTHER LOOPHOLE]</button>}<button className={`primary ${guideActive ? "guide-action" : ""}`} onClick={sendToTest}>{patches.length ? "[TEST THIS WORDING]" : "[TEST THE ORIGINAL]"} <b>↵</b></button></div>
+              {sealedCount > 0 && patches.length > 0 && !duckedPatch && <div className="duck-dock"><button className={`duck-tool ${duckDrag.active ? "dragging" : ""}`} style={{ transform: `translate(${duckDrag.x}px, ${duckDrag.y}px)` }} onPointerDown={startDuckDrag} onPointerMove={moveDuck} onPointerUp={dropDuck} onPointerCancel={() => setDuckDrag({ active: false, x: 0, y: 0 })} aria-label="Drag the pixel duck onto an amendment"><img src="duck-white-on-black.png" alt="White pixel rubber duck" /></button><span>drag onto an amendment to test without it</span></div>}
             </div>
           ) : phase === "record" ? (
             <div className="record-output">
@@ -634,19 +742,20 @@ export default function Home() {
             </div>
           ) : currentAttack ? (
             <article className="attack-output" ref={attackRef}>
-              <p className="system-label danger">{attackOwner === "PLAYER" ? "you&gt;" : "alex&gt;"}</p><h2>{currentAttack.title.toLowerCase()}</h2><p className="attack-move"><b>&gt;</b>{currentAttack.move}</p>
-              {phase === "challenge" && <p className="defence-call">Point to the exact amendment that forbids this move.</p>}
-              {outcome && <div className={`verdict verdict-${outcome.verdict.toLowerCase()}`}><b>{outcome.verdict}</b><span>{outcome.message}</span></div>}
+              <p className="system-label danger">{attackOwner === "PLAYER" ? "YOUR PROPOSED MOVE" : "ALEX'S PROPOSED MOVE"}</p><h2>{currentAttack.title.toLowerCase()}</h2><p className="attack-move"><b>{">"}</b>{currentAttack.move}</p>
+              {phase === "attack" && <p className="attack-question">Would this move still obey your amended task?</p>}
+              {phase === "challenge" && <p className="defence-call">Click the exact amendment that stops this move.</p>}
+              {outcome && <div className={`verdict verdict-${outcome.verdict.toLowerCase()}`}><b>{verdictLabel[outcome.verdict]}</b><span>{outcome.message}</span></div>}
               {nudge && <p className="nudge">{nudge}</p>}
-              <div className="main-actions">{phase === "attack" && <><button className="quiet" onClick={letThrough}>[allowed]</button><button className="primary" onClick={challenge}>[blocked by my wording]</button></>}{phase === "challenge" && <button className="quiet" onClick={() => setPhase("attack")}>[cancel]</button>}{phase === "verdict" && outcome?.verdict === "SEALED" && <button className="primary" onClick={counterattack}>{finished ? "[close task]" : "[next test]"} <b>↵</b></button>}{phase === "verdict" && outcome?.verdict !== "SEALED" && <button className="primary" onClick={returnToEdit}>[rewrite] <b>↵</b></button>}</div>
+              <div className="main-actions">{phase === "attack" && <><button className="quiet" onClick={letThrough}>[YES — STILL ALLOWED]</button><button className="primary" onClick={challenge}>[NO — MY WORDING BLOCKS IT]</button></>}{phase === "challenge" && <button className="quiet" onClick={() => setPhase("attack")}>[cancel]</button>}{phase === "verdict" && outcome?.verdict === "SEALED" && <button className="primary" onClick={counterattack}>{finished ? "[OPEN SPECIMEN RECORD]" : "[LET ALEX TRY ANOTHER MOVE]"} <b>↵</b></button>}{phase === "verdict" && outcome?.verdict !== "SEALED" && <button className="primary" onClick={returnToEdit}>[REWRITE THE TASK] <b>↵</b></button>}</div>
             </article>
           ) : null}
 
           {askOpen && <form className="ask-console" onSubmit={askAlex}>
             <label htmlFor="ask-alex">alex?</label>
-            <input id="ask-alex" value={askQuestion} onChange={(event) => setAskQuestion(event.target.value)} placeholder="anything at all" autoFocus />
+            <input id="ask-alex" value={askQuestion} onChange={(event) => setAskQuestion(event.target.value)} placeholder={alexIntroduced ? "ask anything" : "perhaps begin politely"} autoFocus />
             <button type="submit">[ask]</button>
-            {askAnswer && <p><b>alex&gt;</b> {askAnswer}</p>}
+            {askAnswer && <p><b>{"alex>"}</b> {askAnswer}</p>}
           </form>}
         </section>
         <footer className="workspace-foot"><span>little alex horne: {phase === "attack" || phase === "challenge" || phase === "verdict" ? "reviewing" : "waiting"}</span><span><button onClick={() => setAskOpen((value) => !value)}>ASK ALEX ANYTHING!</button><button onClick={reset}>reset</button></span></footer>

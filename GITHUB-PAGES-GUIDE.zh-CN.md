@@ -37,7 +37,7 @@ GitHub Free 可以从公开仓库免费使用 GitHub Pages。私有仓库使用 
 1. 登录 GitHub。
 2. 点击右上角的 `+`。
 3. 选择 `New repository`。
-4. Repository name 填：`mask-taster`。
+4. Repository name 填：`masktaster`。
 5. Description 可填：`An unofficial wording repair game.`
 6. 选择 `Public`。
 7. **不要**勾选 `Add a README file`。
@@ -50,7 +50,7 @@ GitHub Free 可以从公开仓库免费使用 GitHub Pages。私有仓库使用 
 创建后不要关闭页面。GitHub 会显示一个类似下面的地址：
 
 ```text
-https://github.com/YOUR-NAME/mask-taster.git
+https://github.com/YOUR-NAME/masktaster.git
 ```
 
 把 `YOUR-NAME` 换成你的实际 GitHub 用户名。
@@ -62,7 +62,7 @@ https://github.com/YOUR-NAME/mask-taster.git
 把项目 ZIP 解压到一个固定位置，例如：
 
 ```text
-C:\Users\你的用户名\Documents\mask-taster
+C:\Users\你的用户名\Documents\masktaster
 ```
 
 不要直接在 ZIP 压缩包内部操作。
@@ -86,7 +86,7 @@ vite.pages.config.ts
 也可以手动执行：
 
 ```powershell
-cd "C:\Users\你的用户名\Documents\mask-taster"
+cd "C:\Users\你的用户名\Documents\masktaster"
 ```
 
 路径中有空格时必须保留双引号。
@@ -120,7 +120,7 @@ git commit -m "Initial Mask Taster prototype"
 把下面地址替换成你刚创建的仓库地址：
 
 ```powershell
-git remote add origin https://github.com/YOUR-NAME/mask-taster.git
+git remote add origin https://github.com/YOUR-NAME/masktaster.git
 git push -u origin main
 ```
 
@@ -135,13 +135,13 @@ git remote -v
 如果地址错误，改成：
 
 ```powershell
-git remote set-url origin https://github.com/YOUR-NAME/mask-taster.git
+git remote set-url origin https://github.com/YOUR-NAME/masktaster.git
 git push -u origin main
 ```
 
 ## 4. 启用 GitHub Pages
 
-1. 回到 GitHub 中的 `mask-taster` 仓库。
+1. 回到 GitHub 中的 `masktaster` 仓库。
 2. 点击仓库顶部的 `Settings`。
 3. 在左侧菜单找到 `Pages`。
 4. 在 `Build and deployment` 区域找到 `Source`。
@@ -174,23 +174,41 @@ git push -u origin main
 成功后网址通常是：
 
 ```text
-https://YOUR-NAME.github.io/mask-taster/
+https://YOUR-NAME.github.io/masktaster/
 ```
 
-注意结尾的 `/mask-taster/`。这是项目型 Pages 网站，不是账号主页。
+注意结尾的 `/masktaster/`。这是项目型 Pages 网站，不是账号主页。
 
 ## 6. 以后怎样更新网站
 
-修改完文件后，在项目文件夹中执行：
+如果你拿到了一份新的项目 ZIP：
+
+1. 把新 ZIP 解压到临时文件夹；
+2. 找到电脑上第一次上传时使用的 `masktaster` 文件夹；
+3. 把新 ZIP 内 `masktaster` 文件夹里的全部内容复制到旧文件夹，选择“替换目标中的文件”；
+4. 不要删除旧文件夹里的隐藏 `.git` 文件夹。新版 ZIP 不包含它，它负责记住你的 GitHub 仓库；
+5. 在旧的 `masktaster` 文件夹中打开 PowerShell。
+
+然后执行：
 
 ```powershell
 git status
 git add -A
-git commit -m "Describe this Mask Taster change"
-git push
+git commit -m "Update onboarding and Alex dialogue"
+git push origin main
 ```
 
-每次推送到 `main`，GitHub Actions 都会自动重新构建并覆盖 Pages 网站。
+每次推送到 `main`，GitHub Actions 都会自动重新构建并覆盖 Pages 网站。如果 `git commit` 显示 `nothing to commit`，说明复制位置不对，或者新旧文件完全相同。
+
+如果已经找不到第一次上传时的本地文件夹，先重新下载仓库：
+
+```powershell
+cd "$HOME\Documents"
+git clone https://github.com/YOUR-NAME/masktaster.git
+cd masktaster
+```
+
+再把新 ZIP 中的内容复制进这个刚克隆的文件夹，然后执行上面的 `git status`、`git add -A`、`git commit` 和 `git push origin main`。
 
 建议提交信息描述实际变化，例如：
 
@@ -234,7 +252,7 @@ npm run dev:pages
 普通 GitHub Pages 项目网站位于：
 
 ```text
-/mask-taster/
+/masktaster/
 ```
 
 不是域名根目录 `/`。如果 CSS、JavaScript 或图片仍然指向根目录，就会出现黑屏、无样式或人物图片消失。
@@ -244,7 +262,7 @@ npm run dev:pages
 1. `vite.pages.config.ts` 会从 GitHub 自动提供的 `GITHUB_REPOSITORY` 计算 `/仓库名/`；
 2. Alex 和橡皮鸭图片使用相对于当前页面的路径。
 
-因此仓库名不是 `mask-taster` 也可以工作。重命名仓库后重新运行一次 Actions 即可。
+构建时会自动读取仓库名，因此这里会得到 `/masktaster/`。重命名仓库后重新运行一次 Actions 即可。
 
 ## 9. 可选：使用 `YOUR-NAME.github.io` 根域名
 
@@ -262,7 +280,7 @@ https://YOUR-NAME.github.io/
 
 当前构建配置会自动识别这种账号主页仓库并把基础路径设成 `/`。
 
-但一个 GitHub 账号只能有一个这样的用户主页仓库。Mask Taster 目前更适合先使用普通的 `mask-taster` 项目仓库。
+但一个 GitHub 账号只能有一个这样的用户主页仓库。Mask Taster 目前更适合先使用普通的 `masktaster` 项目仓库。
 
 ## 10. 可选：绑定自己的域名
 
@@ -282,7 +300,7 @@ Name/Host: mask
 Value/Target: YOUR-NAME.github.io
 ```
 
-不要把 CNAME 指向 `YOUR-NAME.github.io/mask-taster`；DNS 记录不能包含 URL 路径。
+不要把 CNAME 指向 `YOUR-NAME.github.io/masktaster`；DNS 记录不能包含 URL 路径。
 
 ### 10.3 修改构建基础路径
 
@@ -295,7 +313,7 @@ Value/Target: YOUR-NAME.github.io
           PAGES_BASE_PATH: /
 ```
 
-提交并推送这次修改。否则 JavaScript 和 CSS 仍可能请求 `/mask-taster/assets/...`。
+提交并推送这次修改。否则 JavaScript 和 CSS 仍可能请求 `/masktaster/assets/...`。
 
 ### 10.4 等待并启用 HTTPS
 
