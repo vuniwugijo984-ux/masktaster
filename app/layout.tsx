@@ -6,11 +6,12 @@ export const metadata: Metadata = {
   description: "An unofficial wording repair game. Rewrite a task, then hand it to Little Alex Horne.",
   icons: {
     icon: [
-      { url: "/favicon.ico", type: "image/x-icon", sizes: "16x16 32x32 48x48" },
-      { url: "/favicon.png", type: "image/png", sizes: "512x512" },
+      { url: "/greg-favicon.ico", type: "image/x-icon" },
+      { url: "/greg-favicon-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/greg-favicon-512.png", type: "image/png", sizes: "512x512" },
     ],
-    shortcut: [{ url: "/favicon-32.png", type: "image/png", sizes: "32x32" }],
-    apple: [{ url: "/apple-touch-icon.png", type: "image/png", sizes: "180x180" }],
+    shortcut: [{ url: "/greg-favicon.ico", type: "image/x-icon" }],
+    apple: [{ url: "/greg-apple-touch-icon.png", type: "image/png", sizes: "180x180" }],
   },
 };
 
