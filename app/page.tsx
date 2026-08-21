@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 
 type Verdict = "SEALED" | "SURVIVES" | "DISPUTED";
-type Phase = "edit" | "attack" | "challenge" | "verdict" | "record";
+type Phase = "edit" | "attack" | "verdict" | "record";
 type Source = "PROGRAMME TEST" | "COUNTER-READING";
 type Token = { id: string; text: string; area: string; punctuation?: boolean; editablePunctuation?: boolean };
 type Patch = {
@@ -17,6 +17,7 @@ type Patch = {
   whisper: string;
   hidesTokens?: string[];
   punctuation?: boolean;
+  breaksTask?: string;
 };
 type Attack = {
   id: string;
@@ -83,13 +84,13 @@ const CAMEL: TaskDefinition = {
     { id: "unaltered", label: "unaltered", area: "object", slot: "object-prefix", order: 30, tags: ["integrity", "contents", "strong"], whisper: "Powerful. It may also prohibit harmless manipulation." },
     { id: "mostly", label: "mostly", area: "object", slot: "object-prefix", order: 10, tags: ["softener"], whisper: "Short, tempting, and generous to loopholes." },
     { id: "moving-camel", label: "Only the camel may move through the gap.", area: "passage", slot: "append-rule", order: 10, tags: ["camel-moves"], whisper: "Fixes which side of the relation must travel." },
-    { id: "neither-moves", label: "Neither the camel nor the gap may move.", area: "passage", slot: "append-rule", order: 40, tags: ["fatal"], whisper: "Secure. Also impossible to perform." },
+    { id: "neither-moves", label: "Neither the camel nor the gap may move.", area: "passage", slot: "append-rule", order: 40, tags: [], whisper: "Secure. Also impossible to perform.", breaksTask: "The task requires the camel to pass through the gap, but this amendment prevents either side of that relation from moving." },
     { id: "physical", label: "physical", area: "gap", slot: "gap-prefix", tags: ["physical-gap"], whisper: "Fixes the noun category, not the opening's history." },
     { id: "fixed-gap", label: "The gap must remain fixed in place.", area: "gap", slot: "append-rule", order: 20, tags: ["gap-fixed"], whisper: "Stops the opening from doing the travelling." },
     { id: "present-at-start", label: "The gap must already exist when the task is read.", area: "gap", slot: "append-rule", order: 30, tags: ["start-set"], whisper: "Freezes the comparison set in time." },
   ],
   attacks: [
-    { id: "separate", title: "SEPARATE THE CAMEL", move: "Cut the camel into pieces and pass the pieces through separately.", opening: "The task identifies the camel, but never requires it to remain connected.", sealTags: ["integrity"], area: "object", source: "PROGRAMME TEST", ruling: "CONTESTED", rulingNote: "Noel Fielding no longer passed an intact camel, but Greg still awarded the attempt one point." },
+    { id: "separate", title: "SEPARATE THE CAMEL", move: "Cut the camel into pieces and pass the pieces through separately.", opening: "The task identifies the camel, but never requires it to remain connected.", sealTags: ["integrity"], area: "object", source: "PROGRAMME TEST", ruling: "CONTESTED", rulingNote: "Noel Fielding passed the camel through in pieces rather than intact; Greg nevertheless awarded him one point." },
     { id: "stuffing", title: "REMOVE THE CONTENTS", move: "Take out the stuffing, flatten the shell, and pass only the shell through.", opening: "A connected shell may remain while its original contents stay behind.", sealTags: ["contents"], disputeTags: ["integrity"], area: "object", source: "PROGRAMME TEST", ruling: "CONTESTED", rulingNote: "Hugh Dennis's emptied shell was accepted and scored." },
     { id: "named-gap", title: "USE A PLACE CALLED GAP", move: "Carry the camel through a shop whose name contains ‘Gap’.", opening: "The noun has not been restricted to a physical opening.", sealTags: ["physical-gap"], area: "gap", source: "PROGRAMME TEST", ruling: "WORDING FAILURE", rulingNote: "Mel Giedroyc's Baby Gap reading was accepted and won the task." },
     { id: "move-gap", title: "MOVE THE GAP", move: "Keep the camel still and lower a movable opening over it.", opening: "The relation is specified. The moving party is not.", sealTags: ["camel-moves", "gap-fixed"], area: "passage", source: "COUNTER-READING" },
@@ -159,7 +160,7 @@ const BALLS: TaskDefinition = {
     { id: "no-deflate", label: "The balls must remain fully inflated throughout the task.", area: "balls", slot: "append-rule", order: 10, tags: ["continuous-inflation"], whisper: "Makes the transit state matter, not only the finish." },
     { id: "mat-remains", label: "The yoga mat must remain on top of the hill throughout the task.", area: "location", slot: "append-rule", order: 20, tags: ["mat-stays"], whisper: "Turns the mat's location into a continuing condition." },
     { id: "no-mat-move", label: "The yoga mat may not be moved.", area: "location", slot: "append-rule", order: 30, tags: ["mat-stays"], whisper: "Directly prevents relocating the destination." },
-    { id: "nothing-moves", label: "Nothing may be moved.", area: "location", slot: "append-rule", order: 50, tags: ["fatal"], whisper: "The balls are included in ‘nothing’." },
+    { id: "nothing-moves", label: "Nothing may be moved.", area: "location", slot: "append-rule", order: 50, tags: [], whisper: "The balls are included in ‘nothing’.", breaksTask: "The task requires the balls to be placed on the mat, but this amendment forbids moving the balls." },
     { id: "unsupported", label: "The balls may not be held or supported.", area: "completion", slot: "append-rule", order: 40, tags: ["unsupported"], whisper: "Distinguishes resting from being kept still." },
     { id: "inside-boundary", label: "Every point of contact must lie inside the mat's boundary.", area: "completion", slot: "append-rule", order: 35, tags: ["inside-boundary"], whisper: "Strengthens ‘on’ from contact to containment." },
     { id: "apparently", label: "apparently", area: "completion", slot: "before-stationary", tags: ["softener"], whisper: "Grammatical. Also much less useful than it first appears." },
@@ -194,10 +195,10 @@ const COMMA: TaskDefinition = {
     { id: "food-handling", text: "food-handling", area: "gloves" },
     { id: "gloves", text: "gloves", area: "gloves" },
     { id: "comma-gloves", text: ",", area: "sequence", punctuation: true },
-    { id: "eat", text: "eat", area: "banana" },
-    { id: "a-2", text: "a", area: "banana" },
-    { id: "whole", text: "whole", area: "banana" },
-    { id: "banana", text: "banana", area: "banana" },
+    { id: "eat", text: "eat", area: "attachment" },
+    { id: "a-2", text: "a", area: "attachment" },
+    { id: "whole", text: "whole", area: "attachment" },
+    { id: "banana", text: "banana", area: "attachment" },
     { id: "comma-banana", text: ",", area: "attachment", punctuation: true, editablePunctuation: true },
     { id: "correctly", text: "correctly", area: "attachment" },
     { id: "put-2", text: "put", area: "tie" },
@@ -216,7 +217,6 @@ const COMMA: TaskDefinition = {
   supportLine: "All tasks must be completed in 100 seconds. Most claps wins.",
   areas: {
     attachment: { cursor: "COMMA", prompt: "Move the punctuation; watch what ‘correctly’ attaches to." },
-    banana: { cursor: "BANANA", prompt: "Tighten what counts as eating the banana." },
     tie: { cursor: "TIE", prompt: "Tighten what counts as putting on the tie." },
     sequence: { cursor: "SEQUENCE", prompt: "Tighten the order of the listed actions." },
     gloves: { cursor: "GLOVES", prompt: "No useful amendment is filed under the gloves." },
@@ -227,19 +227,17 @@ const COMMA: TaskDefinition = {
   },
   patches: [
     { id: "move-comma", label: ",", area: "attachment", slot: "comma-after-correctly", tags: ["banana-correct"], whisper: "Moves ‘correctly’ from the tie phrase to the banana phrase.", hidesTokens: ["comma-banana"], punctuation: true },
-    { id: "banana-peeled", label: "The banana must be peeled before it is eaten.", area: "banana", slot: "append-rule", order: 10, tags: ["banana-peeled"], whisper: "Clarifies one ordinary feature of eating a banana, but not every possible misuse." },
     { id: "tie-knotted", label: "The tie must be knotted around your neck.", area: "tie", slot: "append-rule", order: 20, tags: ["tie-knotted"], whisper: "Turns ‘put on’ into a visible end state." },
     { id: "listed-order", label: "Complete the listed actions from left to right.", area: "sequence", slot: "append-rule", order: 30, tags: ["listed-order"], whisper: "Makes the written order binding." },
-    { id: "simultaneous", label: "Complete each listed action before every other listed action.", area: "sequence", slot: "append-rule", order: 40, tags: ["fatal"], whisper: "Every action cannot precede every other action." },
   ],
   attacks: [
     { id: "move-comma-incident", title: "MOVE THE COMMA", move: "Move the comma after ‘correctly’, so the banana must be eaten correctly and the tie need only be put on.", opening: "That reading is not licensed by the original punctuation. It requires changing the task.", sealTags: ["banana-correct"], area: "attachment", source: "PROGRAMME TEST", ruling: "GREG OVERRIDE", rulingNote: "Richard Osman proposed a revised task. Greg accepted the change for everyone; Richard won, and Joe Wilkinson was disqualified for not eating the banana correctly." },
     { id: "drape-tie", title: "DRAPE THE TIE", move: "Lay the tie across your shoulders without tying a knot.", opening: "‘Put on’ does not specify the tie's finished state.", sealTags: ["tie-knotted"], area: "tie", source: "COUNTER-READING" },
     { id: "clap-first", title: "CLAP FROM THE START", move: "Begin clapping, then put on the gloves, eat the banana and deal with the tie while continuing to clap.", opening: "The list suggests an order in ordinary reading, but never explicitly makes that order a condition.", sealTags: ["listed-order"], area: "sequence", source: "COUNTER-READING" },
   ],
-  weirdTargets: ["THE BANANA", "THE TIE", "THE ORDER"],
+  weirdTargets: ["THE COMMA", "THE TIE", "THE ORDER"],
   weirdMap: {
-    "ALTER|THE BANANA": "move-comma-incident",
+    "MOVE|THE COMMA": "move-comma-incident",
     "USE|THE TIE": "drape-tie",
     "ALTER|THE ORDER": "clap-first",
   },
@@ -278,7 +276,7 @@ const ICE: TaskDefinition = {
     { id: "in-area", label: "All material from the block must remain in the task area.", area: "identity", slot: "append-rule", order: 20, tags: ["material-remains"], whisper: "Prevents disposal, but does not by itself make the block disappear." },
     { id: "single-piece", label: "The block must remain in one piece throughout.", area: "identity", slot: "append-rule", order: 30, tags: ["single-piece"], whisper: "Stops smashing and also makes ordinary melting increasingly awkward." },
     { id: "irreversibly", label: "irreversibly", area: "result", slot: "before-fast", tags: ["irreversible"], whisper: "Sounds strong. It does not define which thing must cease to exist." },
-    { id: "no-matter", label: "No matter from the block may continue to exist.", area: "result", slot: "append-rule", order: 40, tags: ["fatal"], whisper: "This asks for destruction of matter, not disappearance of an ice block." },
+    { id: "no-matter", label: "No matter from the block may continue to exist.", area: "result", slot: "append-rule", order: 40, tags: [], whisper: "This asks for destruction of matter, not disappearance of an ice block.", breaksTask: "The amendment requires the block's matter to cease existing, which no available task action can achieve." },
   ],
   attacks: [
     { id: "hide-ice", title: "HIDE THE BLOCK", move: "Put the intact block somewhere the observer cannot see it.", opening: "‘Disappear’ may describe the observer's view rather than a physical change in the block.", sealTags: ["no-solid"], area: "result", source: "COUNTER-READING" },
@@ -344,6 +342,11 @@ function linkVerdict(task: TaskDefinition, attack: Attack, patch: Patch, ids: st
   return "SURVIVES";
 }
 
+function sealingPatchId(task: TaskDefinition, attack: Attack, ids: string[]) {
+  if (hasSoftenerInArea(task, ids, attack.area)) return null;
+  return ids.find((id) => attack.sealTags.some((tag) => patchById(task, id).tags.includes(tag))) ?? null;
+}
+
 export default function Home() {
   const [screen, setScreen] = useState<"home" | "game">("home");
   const [taskId, setTaskId] = useState("camel");
@@ -378,15 +381,22 @@ export default function Home() {
   const attackRef = useRef<HTMLElement>(null);
   const patchRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const duckDragRef = useRef({ pointerId: 0, startX: 0, startY: 0 });
+  const musicRef = useRef<HTMLAudioElement | null>(null);
+  const musicUnlockedRef = useRef(false);
+  const musicBaseVolumeRef = useRef(0.28);
+  const previousTaskBrokenRef = useRef(false);
+  const surgicalStingPlayedRef = useRef(false);
 
   const task = TASKS.find((item) => item.id === taskId) ?? CAMEL;
   const currentAttack = currentAttackId ? attackById(task, currentAttackId) : null;
   const effectivePatches = duckedPatch ? patches.filter((id) => id !== duckedPatch) : patches;
-  const taskBroken = hasTag(task, effectivePatches, "fatal");
+  const taskBrokenPatch = effectivePatches.map((id) => patchById(task, id)).find((patch) => patch.breaksTask);
+  const taskBroken = Boolean(taskBrokenPatch);
+  const ink = patches.length;
   const sealedCount = task.attacks.filter((attack) => claims[attack.id]?.verdict === "SEALED").length;
   const duckReopened = duckedPatch ? task.attacks.filter((attack) => claims[attack.id]?.patchId === duckedPatch) : [];
   const displayedSealedCount = sealedCount - duckReopened.length;
-  const finished = sealedCount === task.attacks.length && !taskBroken;
+  const finished = displayedSealedCount === task.attacks.length && !taskBroken;
   const area = selectedArea ? task.areas[selectedArea] : null;
 
   const verdictLabel: Record<Verdict, string> = {
@@ -396,16 +406,14 @@ export default function Home() {
   };
 
   const guideCopy = taskBroken
-    ? "FIX — Remove the amendment that makes the task impossible."
+    ? `FIX — Retract “${taskBrokenPatch?.label}” by clicking it in the task, or use undo.`
     : phase === "edit" && snapshots.length === 0 && patches.length === 0
       ? "REVIEW 1/3 — This task produced several readings. Inspect the wording, or review the original first."
       : phase === "edit" && snapshots.length === 0
-        ? "REVIEW 2/3 — Send the amended wording back. Each approach will be tested against it."
+        ? "REVIEW 2/3 — Send the amendment for review. To retract it, click the underlined +wording in the task, or use undo."
         : phase === "attack"
-          ? "REVIEW 3/3 — For this approach, decide whether it was a wording failure, contestant cheek, or a ruling from Greg."
-          : phase === "challenge"
-            ? "REVIEW 3/3 — Click the exact amendment that prevents or resolves this incident."
-            : phase === "verdict"
+          ? "REVIEW 3/3 — Run Alex's move against the current wording. The ruling is automatic."
+          : phase === "verdict"
               ? "RESULT — Read the ruling, then rewrite or let Alex try another move."
               : "Every recorded incident has been addressed. The file is ready.";
 
@@ -421,8 +429,64 @@ export default function Home() {
   }, [patches, task]);
 
   useEffect(() => {
-    if (window.localStorage.getItem("masktaster-guidance-seen") === "1") setGuideActive(false);
+    if (window.localStorage.getItem("masktaster-guidance-v2-seen") === "1") setGuideActive(false);
   }, []);
+
+  useEffect(() => {
+    const music = new Audio();
+    music.loop = true;
+    music.preload = "auto";
+    music.volume = musicBaseVolumeRef.current;
+    musicRef.current = music;
+
+    function unlockMusic() {
+      musicUnlockedRef.current = true;
+      void music.play().catch(() => undefined);
+      window.removeEventListener("pointerdown", unlockMusic);
+      window.removeEventListener("keydown", unlockMusic);
+    }
+
+    window.addEventListener("pointerdown", unlockMusic);
+    window.addEventListener("keydown", unlockMusic);
+    return () => {
+      window.removeEventListener("pointerdown", unlockMusic);
+      window.removeEventListener("keydown", unlockMusic);
+      music.pause();
+      musicRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const music = musicRef.current;
+    if (!music) return;
+    const file = screen === "home" || phase === "record" ? "clair-home.mp3" : "clip1_gymno.mp3";
+    const baseVolume = file === "clair-home.mp3" ? 0.4 : 0.28;
+    const nextSource = new URL(`audio/${file}`, document.baseURI).href;
+    if (music.src !== nextSource) {
+      music.pause();
+      music.src = nextSource;
+      music.currentTime = 0;
+    }
+    musicBaseVolumeRef.current = baseVolume;
+    music.volume = baseVolume;
+    if (musicUnlockedRef.current) void music.play().catch(() => undefined);
+  }, [screen, phase]);
+
+  useEffect(() => {
+    if (taskBroken && !previousTaskBrokenRef.current) playOneShot("mixkit-clown-horn-at-circus-715.wav", 0.62);
+    previousTaskBrokenRef.current = taskBroken;
+  }, [taskBroken]);
+
+  useEffect(() => {
+    if (screen !== "game" || phase !== "record" || ink > 3 || surgicalStingPlayedRef.current) return;
+    surgicalStingPlayedRef.current = true;
+    const music = musicRef.current;
+    if (music) music.volume = 0.1;
+    const sting = playOneShot("tchaikovsky-1812-scrlgs.mp3", 0.74);
+    sting.addEventListener("ended", () => {
+      if (musicRef.current) musicRef.current.volume = musicBaseVolumeRef.current;
+    }, { once: true });
+  }, [screen, phase, ink]);
 
   useEffect(() => {
     function positionLine() {
@@ -449,7 +513,6 @@ export default function Home() {
       if (event.key === "Escape") {
         setWeirdOpen(false);
         setAskOpen(false);
-        if (phase === "challenge") setPhase("attack");
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -517,16 +580,25 @@ export default function Home() {
     setAlexIntroduced(false);
     setAlexReplyIndex(0);
     setHelpOpen(false);
+    previousTaskBrokenRef.current = false;
+    surgicalStingPlayedRef.current = false;
+  }
+
+  function playOneShot(file: string, volume: number) {
+    const clip = new Audio(new URL(`audio/${file}`, document.baseURI).href);
+    clip.volume = volume;
+    void clip.play().catch(() => undefined);
+    return clip;
   }
 
   function finishGuidance() {
     if (!guideActive) return;
     setGuideActive(false);
-    window.localStorage.setItem("masktaster-guidance-seen", "1");
+    window.localStorage.setItem("masktaster-guidance-v2-seen", "1");
   }
 
   function replayGuidance() {
-    window.localStorage.removeItem("masktaster-guidance-seen");
+    window.localStorage.removeItem("masktaster-guidance-v2-seen");
     setGuideActive(true);
     setHelpOpen(false);
   }
@@ -543,7 +615,7 @@ export default function Home() {
   }
 
   function chooseNextAttack(knownClaims = claims) {
-    const unresolved = task.attacks.filter((attack) => !knownClaims[attack.id]);
+    const unresolved = task.attacks.filter((attack) => !knownClaims[attack.id] || (duckedPatch && knownClaims[attack.id]?.patchId === duckedPatch));
     return unresolved[0]?.id ?? null;
   }
 
@@ -570,58 +642,42 @@ export default function Home() {
     setPhase("attack");
   }
 
-  function challenge() {
-    if (!patches.length) {
-      setNudge("There is no amendment to point at.");
-      return;
-    }
-    setNudge("");
-    setPhase("challenge");
-  }
-
-  function selectDefence(id: string) {
+  function runAttackTest() {
     if (!currentAttack) return;
-    const patch = patchById(task, id);
-    const verdict = linkVerdict(task, currentAttack, patch, effectivePatches);
-    let message = "That amendment governs something else. The move still fits the task.";
-    if (verdict === "SEALED") message = `“${patch.label}” directly conflicts with Alex's counterexample.`;
-    if (verdict === "DISPUTED") message = `“${patch.label}” pushes against the move, but does not settle the reading.`;
-    setOutcome({ verdict, message, patchId: id });
-    setPhase("verdict");
-    setNudge("");
-    if (verdict === "SEALED") setClaims((items) => ({ ...items, [currentAttack.id]: { patchId: id, verdict: "SEALED" } }));
-  }
-
-  function letThrough() {
-    if (!currentAttack) return;
-    if (currentAttack.ruling === "GREG OVERRIDE") {
-      setOutcome({ verdict: "DISPUTED", label: "GREG OVERRIDE", message: `The original wording did not allow that reading. ${currentAttack.rulingNote ?? "Greg changed the ruling anyway."}` });
-      setPhase("verdict");
-      setNudge("");
-      return;
-    }
     const actual = overallVerdict(task, currentAttack, effectivePatches);
-    if (actual === "SEALED") {
-      setNudge("The move hits an amendment. Point to the one you meant.");
-      return;
+    const patchId = actual === "SEALED" ? sealingPatchId(task, currentAttack, effectivePatches) : null;
+
+    if (actual === "SEALED" && patchId) {
+      const patch = patchById(task, patchId);
+      const isWrittenOverride = currentAttack.ruling === "GREG OVERRIDE";
+      setOutcome({
+        verdict: "SEALED",
+        patchId,
+        label: isWrittenOverride ? "RULING WRITTEN IN" : undefined,
+        message: isWrittenOverride
+          ? `“${patch.label}” makes the revised instruction explicit. It addresses the incident without pretending the original wording already allowed it.`
+          : `“${patch.label}” prevents this move under the current wording.`,
+      });
+      setClaims((items) => ({ ...items, [currentAttack.id]: { patchId, verdict: "SEALED" } }));
+    } else if (currentAttack.ruling === "GREG OVERRIDE") {
+      setOutcome({ verdict: "DISPUTED", label: "GREG OVERRIDE", message: `The original wording did not allow that reading. ${currentAttack.rulingNote ?? "Greg changed the ruling anyway."}` });
+    } else {
+      const programmeNote = currentAttack.source === "PROGRAMME TEST" && currentAttack.rulingNote
+        ? ` ${currentAttack.ruling}: ${currentAttack.rulingNote}`
+        : "";
+      const message = actual === "DISPUTED"
+        ? `The wording pushes against this move but does not settle the reading.${programmeNote}`
+        : `${currentAttack.opening}${programmeNote}`;
+      setOutcome({ verdict: actual, message });
+      if (actual === "SURVIVES") playOneShot("mixkit-funny-video-game-slide-2888.wav", 0.58);
     }
-    const programmeNote = currentAttack.source === "PROGRAMME TEST" && currentAttack.rulingNote
-      ? ` ${currentAttack.ruling}: ${currentAttack.rulingNote}`
-      : "";
-    setOutcome({ verdict: actual, message: `${actual === "DISPUTED" ? "The wording leans against the move, but leaves enough room to argue." : currentAttack.opening}${programmeNote}` });
     setPhase("verdict");
     setNudge("");
   }
 
-  function callCheek() {
-    if (!currentAttack) return;
-    let message = currentAttack.rulingNote ?? "The programme left no recorded ruling for this move.";
-    if (currentAttack.ruling === "WORDING FAILURE") message = `The move is cheeky, but the task really does leave the route open. ${message}`;
-    if (currentAttack.ruling === "GREG OVERRIDE") message = `Correct about the original text: it did not license this reading. ${message}`;
-    if (currentAttack.ruling === "CONTESTED") message = `A fair objection. The wording and the object no longer line up cleanly. ${message}`;
-    setOutcome({ verdict: "DISPUTED", label: currentAttack.ruling ?? "CONTESTANT CHEEK", message });
-    setPhase("verdict");
-    setNudge("");
+  function retractBrokenPatch() {
+    if (!taskBrokenPatch) return;
+    commitPatches(patches.filter((id) => id !== taskBrokenPatch.id));
   }
 
   function returnToEdit() {
@@ -730,18 +786,33 @@ export default function Home() {
         setAskAnswer("...");
       }
     } else {
-      const evasions = [
-        "All the information is on the page.",
-        "Well...",
-        "All the information is on the page.",
-        "Yes and no?",
-        "All the information is on the page.",
-        "Depends on Greg.",
-        "All the information is on the page.",
-        "I wouldn't have done that.",
-        "All the information is on the page.",
-        "That's classic you.",
+      const subjects: Array<[RegExp, string]> = [
+        [/\bmat\b/, "the mat"],
+        [/\bballs?\b/, "the balls"],
+        [/\bhill\b/, "the hill"],
+        [/\bcamels?\b/, "the camel"],
+        [/\bgaps?\b/, "the gap"],
+        [/\bstuffing|contents?\b/, "the contents"],
+        [/\bbanana\b/, "the banana"],
+        [/\btie\b/, "the tie"],
+        [/\bice|block\b/, "the ice block"],
+        [/\bducks?\b/, "the duck"],
+        [/\btask|wording|rules?|loopholes?|amendments?\b/, "the wording"],
       ];
+      const subject = subjects.find(([pattern]) => pattern.test(query))?.[1];
+      const evasions = /\b(?:legal|legally|lawful|allowed)\b/.test(query)
+        ? ["It has the appearance of something that might be legal.", "I can confirm that you have used the word ‘legal’. Beyond that, no."]
+        : /\b(?:all good|good now|okay now|fine now|ready)\b/.test(query)
+          ? ["It is certainly more finished than it was.", "It now contains more wording. I can confirm that much."]
+          : /\b(?:block|blocked|closed|sealed|stop)\b/.test(query)
+            ? ["Something has been prevented. I wouldn't like to say what.", "The amendment is present. Its achievements remain a private matter."]
+            : /\bgreg\b/.test(query)
+              ? ["Greg has not asked me to answer that.", "I wouldn't want to prejudge Greg. Or answer you."]
+              : subject
+                ? [`I heard the part about ${subject}. I'm not going to improve it for you.`, `Your question about ${subject} has been noted and carefully left unanswered.`]
+                : /\b(?:why|how)\b/.test(query)
+                  ? ["I understand why you're asking. That's not the same as answering.", "I followed the question. I simply don't have anything useful to add."]
+                  : ["I followed that. I'm choosing not to clarify it.", "That was comprehensible and has still not earned an answer."];
       setAskAnswer(isGreeting ? "Now we're established." : evasions[alexReplyIndex % evasions.length]);
       if (!isGreeting) setAlexReplyIndex((value) => value + 1);
     }
@@ -754,9 +825,9 @@ export default function Home() {
         key={patch.id}
         ref={(node) => { patchRefs.current[patch.id] = node; }}
         data-patch-id={patch.id}
-        className={`amendment ${patch.punctuation ? "punctuation-amendment" : ""} ${phase === "challenge" ? "defendable" : ""} ${duckedPatch === patch.id ? "ducked" : ""}`}
-        onClick={() => duckedPatch === patch.id ? (setDuckedPatch(null), setNudge("Wording restored.")) : phase === "challenge" ? selectDefence(patch.id) : togglePatch(patch.id)}
-        aria-label={`${duckedPatch === patch.id ? "Remove duck from" : phase === "challenge" ? "Use" : "Remove"} ${patch.label}`}
+        className={`amendment ${patch.punctuation ? "punctuation-amendment" : ""} ${duckedPatch === patch.id ? "ducked" : ""}`}
+        onClick={() => duckedPatch === patch.id ? (setDuckedPatch(null), setNudge("Wording restored.")) : togglePatch(patch.id)}
+        aria-label={`${duckedPatch === patch.id ? "Remove duck from" : "Remove"} ${patch.label}`}
       >
         {patch.label}
         {duckedPatch === patch.id && <img className="duck-on-word" src="duck-white-on-black.png" alt="White pixel duck covering this amendment" />}
@@ -821,7 +892,7 @@ export default function Home() {
       </header>
 
       {helpOpen && <section className="help-panel">
-        <span>Review each approach.</span><span>Check whether the wording really allowed it.</span><span>Amend the task to prevent another argument.</span>
+        <span>Select wording to amend.</span><span>Send it to Alex for an automatic test.</span><span>Retract an amendment by clicking its underlined +wording in the task, or use undo.</span>
         <button onClick={replayGuidance}>[replay guidance]</button><button onClick={() => setHelpOpen(false)}>[close]</button>
       </section>}
 
@@ -840,10 +911,10 @@ export default function Home() {
           <div className="alex-mark"><img src={phase === "edit" || phase === "record" ? "alex-horne.png" : "alex-assistant.png"} width="104" height="140" alt="Little Alex Horne" /><span>LITTLE ALEX HORNE</span></div>
 
           {taskBroken ? (
-            <div className="single-output"><p className="system-label danger">TASK BROKEN</p><h2>No executable route remains.</h2><p>Your amendment makes the requested outcome impossible.</p><button className="primary" onClick={returnToEdit}>[retract amendment]</button></div>
+            <div className="single-output"><p className="system-label danger">TASK BROKEN</p><h2>“{taskBrokenPatch?.label}”</h2><p>{taskBrokenPatch?.breaksTask}</p><button className="primary" onClick={retractBrokenPatch}>[retract this amendment]</button></div>
           ) : phase === "edit" ? (
             <div className="editor-output">
-              <div className="editor-prompt"><p className="system-label">{area ? "mt>" : "review>"}</p><h2>{area ? `amend “${task.tokens.find((token) => token.id === selectedToken)?.text ?? area.cursor}”` : `${task.attacks.filter((attack) => attack.source === "PROGRAMME TEST").length} programme approaches; ${task.attacks.filter((attack) => attack.source === "COUNTER-READING").length} follow-up readings.`}</h2>{nudge && <p>{nudge}</p>}</div>
+              <div className="editor-prompt"><p className="system-label">{area ? "mt>" : "review>"}</p><h2>{area ? `amend “${task.tokens.find((token) => token.id === selectedToken)?.text ?? area.cursor}”` : "select any wording you want to amend"}</h2>{nudge && <p>{nudge}</p>}</div>
               {area ? <><p className="area-prompt">{area.prompt}</p><div className="patch-menu">{task.patches.filter((patch) => patch.area === selectedArea).map((patch, index) => <button className={patches.includes(patch.id) ? "selected" : ""} key={patch.id} onClick={() => togglePatch(patch.id)} title={patch.whisper}><span className="key">{index + 1}</span><span>{patch.label}</span></button>)}</div></> : <p className="area-prompt">Inspect the wording, or send the original back unchanged.</p>}
               {weirdOpen && <div className="weird-box"><p>Test a move you think the current wording still allows.</p><div className="weird-line"><span>{">"}</span><select value={weirdVerb} onChange={(event) => setWeirdVerb(event.target.value)} aria-label="Attack verb">{["MOVE", "REMOVE", "ALTER", "SEPARATE", "CREATE", "USE"].map((value) => <option key={value}>{value}</option>)}</select><select value={weirdTarget} onChange={(event) => setWeirdTarget(event.target.value)} aria-label="Attack target">{task.weirdTargets.map((value) => <option key={value}>{value}</option>)}</select><button onClick={submitWeirdAttack}>RUN</button></div></div>}
               {!!snapshots.length && <div className="history-line"><span>VERSIONS</span>{snapshots.map((snapshot) => <button key={snapshot.label} onClick={() => restoreSnapshot(snapshot)}>{snapshot.label}</button>)}</div>}
@@ -852,7 +923,7 @@ export default function Home() {
             </div>
           ) : phase === "record" ? (
             <div className="record-output">
-              <p className="system-label success">AMENDMENT FILE</p><h2>REVIEW COMPLETE</h2><p>{sealedCount} recorded incidents or follow-up readings addressed. The test set is finite.</p>
+              <p className="system-label success">AMENDMENT FILE</p><h2>{ink <= 3 ? "SURGICAL" : "REVIEW COMPLETE"}</h2><p>The amended wording has been filed.</p>
               <div className="final-task"><span>FINAL WORDING</span><b>{sentenceText}</b></div>
               <ol className="attack-log">{task.attacks.map((attack) => { const claim = claims[attack.id]; return <li key={attack.id}><span>{playerFound.includes(attack.id) ? "YOUR ATTACK" : attack.source}</span><b>{attack.title}</b><i>{claim ? `ADDRESSED BY “${patchById(task, claim.patchId).label}”` : "UNRESOLVED"}</i></li>; })}</ol>
               {!!unverified.length && <p className="unverified">UNVERIFIED: {unverified.join(" · ")}</p>}
@@ -862,11 +933,10 @@ export default function Home() {
           ) : currentAttack ? (
             <article className="attack-output" ref={attackRef}>
               <p className="system-label danger">{attackOwner === "PLAYER" ? "YOUR PROPOSED MOVE" : currentAttack.source === "PROGRAMME TEST" ? "INCIDENT ON RECORD" : "ALEX'S FOLLOW-UP"}</p><h2>{currentAttack.title.toLowerCase()}</h2><p className="attack-move"><b>{">"}</b>{currentAttack.move}</p>
-              {phase === "attack" && <p className="attack-question">Did the task actually allow this?</p>}
-              {phase === "challenge" && <p className="defence-call">Click the exact amendment that prevents or resolves this incident.</p>}
+              {phase === "attack" && <p className="attack-question">Run this move against the current wording.</p>}
               {outcome && <div className={`verdict verdict-${outcome.verdict.toLowerCase()}`}><b>{outcome.label ?? verdictLabel[outcome.verdict]}</b><span>{outcome.message}</span></div>}
               {nudge && <p className="nudge">{nudge}</p>}
-              <div className="main-actions">{phase === "attack" && <><button className="quiet" onClick={letThrough}>[THE WORDING ALLOWS IT]</button>{currentAttack.source === "PROGRAMME TEST" && <button className="quiet" onClick={callCheek}>[THAT WAS JUST CHEEK]</button>}<button className="primary" onClick={challenge}>[MY AMENDMENT ADDRESSES IT]</button></>}{phase === "challenge" && <button className="quiet" onClick={() => setPhase("attack")}>[cancel]</button>}{phase === "verdict" && outcome?.verdict === "SEALED" && <button className="primary" onClick={counterattack}>{finished ? "[OPEN AMENDMENT FILE]" : "[LET ALEX CHECK ANOTHER READING]"} <b>↵</b></button>}{phase === "verdict" && outcome?.verdict !== "SEALED" && <button className="primary" onClick={returnToEdit}>[AMEND THE TASK] <b>↵</b></button>}</div>
+              <div className="main-actions">{phase === "attack" && <button className="primary" onClick={runAttackTest}>[RUN TEST] <b>↵</b></button>}{phase === "verdict" && outcome?.verdict === "SEALED" && <button className="primary" onClick={counterattack}>{finished ? "[OPEN AMENDMENT FILE]" : "[LET ALEX CHECK ANOTHER READING]"} <b>↵</b></button>}{phase === "verdict" && outcome?.verdict !== "SEALED" && <button className="primary" onClick={returnToEdit}>[AMEND THE TASK] <b>↵</b></button>}</div>
             </article>
           ) : null}
 
@@ -877,7 +947,7 @@ export default function Home() {
             {askAnswer && <p><b>{"alex>"}</b> {askAnswer}</p>}
           </form>}
         </section>
-        <footer className="workspace-foot"><span>little alex horne: {phase === "attack" || phase === "challenge" || phase === "verdict" ? "reviewing" : "waiting"}</span><span><button onClick={() => setAskOpen((value) => !value)}>ASK ALEX ANYTHING!</button><button onClick={reset}>reset</button></span></footer>
+        <footer className="workspace-foot"><span>little alex horne: {phase === "attack" || phase === "verdict" ? "reviewing" : "waiting"}</span><span><button onClick={() => setAskOpen((value) => !value)}>ASK ALEX ANYTHING!</button><button onClick={reset}>reset</button></span></footer>
       </div>
     </main>
   );
